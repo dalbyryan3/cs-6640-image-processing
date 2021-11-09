@@ -15,7 +15,7 @@ class RegistrationDatasetLoader(Dataset):
         self.name_csv = pd.read_csv(csv_file)
         self.root_dir_input = root_dir_input
         self.root_dir_ref = root_dir_ref
-        self.transform = transforms.Compose([transforms.ToTensor(), transform])
+        self.transform = transforms.Compose([transforms.ToTensor()])
 
     def __len__(self):
         return len(self.name_csv)
