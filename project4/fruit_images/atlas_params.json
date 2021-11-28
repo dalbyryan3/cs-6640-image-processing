@@ -1,0 +1,9 @@
+{
+"Input files":["mango.png", "pear.png", "orange.png", "apple.png"],
+"Correspondences":
+[
+[[285,51],  [343,92],  [422, 70],  [489,76]],
+[[285,51],  [343,92],  [422, 70],  [489,76]]
+],
+"Output file": "fruit_atlas_out"
+}
