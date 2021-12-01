@@ -14,7 +14,7 @@ import matplotlib.pyplot as plt
 import skimage as ski
 import scipy
 from skimage import io
-from scipy.interpolate import griddata, RBFInterpolator
+from scipy.interpolate import griddata, RBFInterpolator, RectBivariateSpline
 
 # %%
 shape_img_dir = './shape_images/'
@@ -199,16 +199,11 @@ plt.imshow(new_img2, cmap='gray')
 plt.show()
 
 #%%
-# Questions:
-# How do I use interpolation- currently I just round (by truncating to an int) and directly index into the image to sample from. I feel like this is wrong, my results also indicate my morphing is off...(correspondences don't align i.e. jfk morphed hairline doesn't align with original lincoln hairline)
-# Confused, I have solved for the coefficients k (implemented my own RBF, can I use scipy RBFInterpolator? it seems like it does exactly that), when do I use scipy interpolation? (Currently slow to compute, have to compute for each pixel in image against all correlation points)
-# Canvas size of morphing images of different sizes?
-    # Just fill with black?
-    # Dealing with Ts that produce negative indices or out of bounds indicies? Fill with black?
-# What exactly is parameter t in image morphing
-
-# More detail on what an atlas is?
-
+def pad_image_to_bigger_or_equal_size_at_dim_ends(img, size):
+    # Assumes size is greater than or equal to img_shape
+    img_shape = np.array(img.shape)
+    pad_amt = size-img_shape
+    return np.pad(img, ((0,pad_amt[0]),(0,pad_amt[1])))
 
 params_filepath = '{0}{1}'.format(president_img_dir, morph_params_filename)
 morph_filenames, morph_correspondences_dict, morph_output_filename = read_morph(params_filepath)
@@ -224,36 +219,53 @@ img2_corr[:,[0,1]] = img2_corr[:,[1,0]]
 root_path = os.path.dirname(os.path.abspath(params_filepath))
 img1 = ski.img_as_float(io.imread(os.path.join(root_path, morph_filenames[0]), as_gray=True))
 img2 = ski.img_as_float(io.imread(os.path.join(root_path, morph_filenames[1]), as_gray=True))
+# Pad images to be same size, will add to ends of dimensions so correspondence locations still have same meaning
+final_image_size = np.maximum(img1.shape, img2.shape)
+img1 = pad_image_to_bigger_or_equal_size_at_dim_ends(img1, final_image_size)
+img2 = pad_image_to_bigger_or_equal_size_at_dim_ends(img2, final_image_size)
 
-T1 = RBFInterpolator(img1_corr, img2_corr)
-img1_idxs = np.indices(img1.shape).reshape((2,-1)).T
-T1_img_1 = T1(img1_idxs).astype(int)
-new_img1 = np.zeros(img1.shape)
-for i, idx in enumerate(img1_idxs):
-    new_img1[tuple(idx)] = img1[tuple(T1_img_1[i])]
+
+# RBF based coordinate warping can be viewed as RBF interpolation that will allow sampling using coordinates of the image that is being morphed "towards" to get the coordinates of the original image to sample from such that the correspondences of the original align with the correspondences of the image that is being morphed "towards"
+# i.e. for morphing img1 "towards" img2 (what I called T1 because we will sample img1 with transformed values) would be able to query interpolator at a coordinate of img2 to get its corresponding img1 coordinate based on the defined correspondence relationships. More specifically suppose we query a correspondence coordinate of img2 we will get out the corresponding correspondence coordinate of img1 where we can sample at to get the pixel value we should place at that img2 coordinate to make it look like img1 morphed "towards" img2. 
+T1 = RBFInterpolator(img2_corr, img1_corr) 
+T2 = RBFInterpolator(img1_corr, img2_corr) 
+
+# Just like interp2d but specific for evenly spaced grids
+img1_interp2d = RectBivariateSpline(np.arange(final_image_size[0]), np.arange(final_image_size[1]), img1)
+img2_interp2d = RectBivariateSpline(np.arange(final_image_size[0]), np.arange(final_image_size[1]), img2)
+
+final_img_idxs = np.indices(final_image_size).reshape((2,-1)).T
+T1_final_image = T1(final_img_idxs)
+T2_final_image = T2(final_img_idxs)
+
+new_img1 = img1_interp2d(T1_final_image[:,0], T1_final_image[:,1], grid=False).reshape(final_image_size)
+new_img2 = img2_interp2d(T2_final_image[:,0], T2_final_image[:,1], grid=False).reshape(final_image_size)
+
+
+# new_img1 = np.zeros(img1.shape)
+# for i, idx in enumerate(img1_idxs):
+#     new_img1[tuple(idx)] = img1[tuple(T1_img_1[i])]
 
 plt.figure()
 plt.imshow(new_img1, cmap='gray')
 plt.show()
-
-T2 = RBFInterpolator(img2_corr, img1_corr)
-img2_idxs = np.indices(img2.shape).reshape((2,-1)).T
-T2_img_2 = T2(img2_idxs).astype(int)
-new_img2 = np.zeros(img2.shape)
-for i, idx in enumerate(img2_idxs):
-    try:
-        new_img2[tuple(idx)] = img2[tuple(T2_img_2[i])]
-    except:
-        new_img2[tuple(idx)] = 0 
-
-
 plt.figure()
 plt.imshow(new_img2, cmap='gray')
 plt.show()
+
 # TODO 
-# MAY NEED TO FLIP tuple(idx) and tuple(T*_img_*)
-# Want to combine T and solve_transform_params to perform like RBFInterpolator and be faster than current implementation.
-# Need to use interp2D to do sampling from original image intelligently rather than if else checks and astype(int)...
+# Perform morphing:
+    # Interpolating between correspondences for a t value
+    # Using the interpolated correspondences, and img1 correspondences to create T1
+    # Using the interpolated correspondences, and img2 correspondences to create T2
+    # Then blend morphed images correctly to get final morph for a t value
+    # Do the above for an arbitrary number of t values
+# Clean up code, combine T and solve_transform_params to perform like RBFInterpolator and be faster than current implementation. RBFInterpolator should be used like a test case for self-implemented RBFInterpolator, write up and describe morphing.
+# Correspondences of brain images, try modifying display_images_for_labelling.py to use ginput to get get correspondences quicker
+# Implement atlas
+# Deal with contrast/intensity differences for both algorithms using rescaling and/or historgram matching 
+# Clean up all code and finish write up by answering ALL questions
+
 # %% [markdown]
 # ## Visualize correspondences of atlases  
 # %%
