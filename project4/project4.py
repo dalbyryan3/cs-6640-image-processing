@@ -14,7 +14,7 @@ import matplotlib.pyplot as plt
 import skimage as ski
 import scipy
 from skimage import io
-from scipy.interpolate import griddata
+from scipy.interpolate import griddata, RBFInterpolator
 
 # %%
 shape_img_dir = './shape_images/'
@@ -120,6 +120,11 @@ def solve_transform_params(xy_corr, xy_prime_corr, basis_function):
     U, s, Vh = scipy.linalg.svd(B_full)
     B_full_inv = np.dot(np.transpose(Vh), np.dot(np.diag(s**-1), np.transpose(U)))
     kp_vec = np.dot(B_full_inv, xy_prime_corr_vec)
+    # Confirm svd results give correct inverse
+    # print('------------------------')
+    # print(B_full_inv)
+    # print('------------------------')
+    # print(np.linalg.inv(B_full))
 
     kx = kp_vec[:N]
     px = kp_vec[N:N+3] # p2, p1, p0
@@ -163,23 +168,23 @@ def morph(params_filepath):
     new_img1 = np.zeros(new_img_shape)
     new_img2 = np.zeros(new_img_shape)
 
-    for x in range(new_img_shape[1]):
-        for y in range(new_img_shape[0]):
-            # need to get transformed xy (need interpolation???)
+    # for x in range(new_img_shape[1]):
+    #     for y in range(new_img_shape[0]):
+    #         # need to get transformed xy (need interpolation???)
 
-            xy_prime1 = T(np.array([x,y]), kx1, px1, ky1, py1, img1_corr, rbf_thin_plate_splines)
-            xy_prime1 = xy_prime1.astype(int)
-            if np.any(np.logical_or(xy_prime1 >= np.array((img1.shape[1],img1.shape[0])), xy_prime1 < 0)):
-                new_img1[y,x] = 0 
-            else:
-                new_img1[y,x] = img1[xy_prime1[1], xy_prime1[0]]
+    #         xy_prime1 = T(np.array([x,y]), kx1, px1, ky1, py1, img1_corr, rbf_thin_plate_splines)
+    #         xy_prime1 = xy_prime1.astype(int)
+    #         if np.any(np.logical_or(xy_prime1 >= np.array((img1.shape[1],img1.shape[0])), xy_prime1 < 0)):
+    #             new_img1[y,x] = 0 
+    #         else:
+    #             new_img1[y,x] = img1[xy_prime1[1], xy_prime1[0]]
 
-            xy_prime2 = T(np.array([x,y]), kx2, px2, ky2, py2, img2_corr, rbf_thin_plate_splines)
-            xy_prime2 = xy_prime2.astype(int)
-            if np.any(np.logical_or(xy_prime2 >= np.array((img2.shape[1],img2.shape[0])), xy_prime2 < 0)):
-                new_img2[y,x] = 0 
-            else:
-                new_img2[y,x] = img2[xy_prime2[1], xy_prime2[0]]
+    #         xy_prime2 = T(np.array([x,y]), kx2, px2, ky2, py2, img2_corr, rbf_thin_plate_splines)
+    #         xy_prime2 = xy_prime2.astype(int)
+    #         if np.any(np.logical_or(xy_prime2 >= np.array((img2.shape[1],img2.shape[0])), xy_prime2 < 0)):
+    #             new_img2[y,x] = 0 
+    #         else:
+    #             new_img2[y,x] = img2[xy_prime2[1], xy_prime2[0]]
     
     return new_img1, new_img2
     
@@ -195,9 +200,60 @@ plt.show()
 
 #%%
 # Questions:
-# How do I use interpolation- currently I just round (by truncating to an int) and directly index into the image to sample from
-# Am I messing up x/y r/c indices?
+# How do I use interpolation- currently I just round (by truncating to an int) and directly index into the image to sample from. I feel like this is wrong, my results also indicate my morphing is off...(correspondences don't align i.e. jfk morphed hairline doesn't align with original lincoln hairline)
+# Confused, I have solved for the coefficients k (implemented my own RBF, can I use scipy RBFInterpolator? it seems like it does exactly that), when do I use scipy interpolation? (Currently slow to compute, have to compute for each pixel in image against all correlation points)
+# Canvas size of morphing images of different sizes?
+    # Just fill with black?
+    # Dealing with Ts that produce negative indices or out of bounds indicies? Fill with black?
+# What exactly is parameter t in image morphing
 
+# More detail on what an atlas is?
+
+
+params_filepath = '{0}{1}'.format(president_img_dir, morph_params_filename)
+morph_filenames, morph_correspondences_dict, morph_output_filename = read_morph(params_filepath)
+if len(morph_filenames) != 2:
+    raise Exception('Can only morph between 2 images')
+# These are xy
+img1_corr = morph_correspondences_dict[morph_filenames[0]]
+img2_corr = morph_correspondences_dict[morph_filenames[1]]
+# Flip to yx to be rc
+img1_corr[:,[0,1]] = img1_corr[:,[1,0]]
+img2_corr[:,[0,1]] = img2_corr[:,[1,0]]
+
+root_path = os.path.dirname(os.path.abspath(params_filepath))
+img1 = ski.img_as_float(io.imread(os.path.join(root_path, morph_filenames[0]), as_gray=True))
+img2 = ski.img_as_float(io.imread(os.path.join(root_path, morph_filenames[1]), as_gray=True))
+
+T1 = RBFInterpolator(img1_corr, img2_corr)
+img1_idxs = np.indices(img1.shape).reshape((2,-1)).T
+T1_img_1 = T1(img1_idxs).astype(int)
+new_img1 = np.zeros(img1.shape)
+for i, idx in enumerate(img1_idxs):
+    new_img1[tuple(idx)] = img1[tuple(T1_img_1[i])]
+
+plt.figure()
+plt.imshow(new_img1, cmap='gray')
+plt.show()
+
+T2 = RBFInterpolator(img2_corr, img1_corr)
+img2_idxs = np.indices(img2.shape).reshape((2,-1)).T
+T2_img_2 = T2(img2_idxs).astype(int)
+new_img2 = np.zeros(img2.shape)
+for i, idx in enumerate(img2_idxs):
+    try:
+        new_img2[tuple(idx)] = img2[tuple(T2_img_2[i])]
+    except:
+        new_img2[tuple(idx)] = 0 
+
+
+plt.figure()
+plt.imshow(new_img2, cmap='gray')
+plt.show()
+# TODO 
+# MAY NEED TO FLIP tuple(idx) and tuple(T*_img_*)
+# Want to combine T and solve_transform_params to perform like RBFInterpolator and be faster than current implementation.
+# Need to use interp2D to do sampling from original image intelligently rather than if else checks and astype(int)...
 # %% [markdown]
 # ## Visualize correspondences of atlases  
 # %%
