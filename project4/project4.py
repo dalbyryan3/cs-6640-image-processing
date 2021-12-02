@@ -319,10 +319,10 @@ def morph(params_filepath):
         T1 = RBFCoordinateMorpher(c_corr, img1_corr, rbf_thin_plate_splines) 
         # Morphing img2 "towards" c_corr
         T2 = RBFCoordinateMorpher(c_corr, img2_corr, rbf_thin_plate_splines) 
-        T1_final_img = T1(final_img_idxs)
-        T2_final_img = T2(final_img_idxs)
+        T1_final_img_sampling_vals = T1(final_img_idxs)
+        T2_final_img_sampling_vals = T2(final_img_idxs)
 
-        final_img = ((1-t)*img1_interp2d(T1_final_img[:,0], T1_final_img[:,1], grid=False) + t*img2_interp2d(T2_final_img[:,0], T2_final_img[:,1], grid=False)).reshape(final_img_size)
+        final_img = ((1-t)*img1_interp2d(T1_final_img_sampling_vals[:,0], T1_final_img_sampling_vals[:,1], grid=False) + t*img2_interp2d(T2_final_img_sampling_vals[:,0], T2_final_img_sampling_vals[:,1], grid=False)).reshape(final_img_size)
 
         final_img_list.append(final_img)
 
@@ -349,6 +349,69 @@ atlas_shapes_input_filenames, atlas_shapes_correspondences_dict, atlas_shapes_ou
 atlas_fruit_input_filenames, atlas_fruit_correspondences_dict, atlas_fruit_output_filename = visualize_correspondences('{0}{1}'.format(fruit_img_dir, atlas_params_filename), is_atlas=True, figsize=(15,5), color=['red','green','blue','black', 'gray', 'maroon', 'darkorange', 'cyan', 'magenta', 'lightgreen'], suptitle_text='Atlas Fruits Correspondences', suptitle_fontsize=20)
 atlas_fruit_input_filenames, atlas_fruit_correspondences_dict, atlas_fruit_output_filename = visualize_correspondences('{0}{1}'.format(brain_img_dir, atlas_params_filename), is_atlas=True, figsize=(50,5), color=['red','green','blue','black', 'gray', 'maroon', 'darkorange', 'cyan', 'magenta', 'lightgreen','cadetblue', 'lightyellow'], suptitle_text='Atlas Fruits Correspondences', suptitle_fontsize=20)
 # %%
+# Atlas routine
 def atlas(params_filepath):
-    pass
+    # Get root directory path
+    root_path = os.path.dirname(os.path.abspath(params_filepath))
+
+    # Read morph file that describes correspondences
+    atlas_filenames, atlas_correspondences_dict, atlas_output_filename = read_atlas(params_filepath)
+
+    # Extract images and info from read atlas file 
+    img_list = []
+    corr_list = []
+    final_img_r = 0
+    final_img_c = 0
+    for img_filename in atlas_correspondences_dict:
+        # These are rc (row column) already
+        img_corr = atlas_correspondences_dict[img_filename]
+        corr_list.append(img_corr)
+        # Get original image
+        img = ski.img_as_float(io.imread(os.path.join(root_path, img_filename), as_gray=True))
+        if (img.shape[0] > final_img_r):
+            final_img_r = img.shape[0]
+        if (img.shape[1] > final_img_c):
+            final_img_c = img.shape[1]
+        img_list.append(img)
+    
+    # Determine mean correlation values
+    corr_mat = np.array(corr_list) # MxNx2 where m is the number of samples and n is the number of landmarks
+    M = corr_mat.shape[0] 
+    corr_mean_vec = np.mean(corr_mat, axis=0)
+
+    # Determine final image size for image pre-processing
+    final_img_size = (final_img_r, final_img_c)
+    final_img_idxs = np.indices(final_img_size).reshape((2,-1)).T
+    imgs_morphed_to_mean_list = []
+
+    # Now will do image pre-processing, form interpolators for each image, use RBFCoordinateMorpher and sample to get image mapped to mean
+    for i in range(len(img_list)):
+        img = img_list[i]
+        img_corr = corr_list[i]
+        # Pad images to be same size, will add to ends of dimensions so correspondence locations still have same meaning
+        img_processed = pad_image_to_bigger_or_equal_size_at_dim_ends(img, final_img_size)
+
+        # Will create interpolator objects for sampling from original images
+        # RectBiVariateSpline ust like interp2d but specific for evenly spaced grids
+        img_interp2d = RectBivariateSpline(np.arange(final_img_size[0]), np.arange(final_img_size[1]), img_processed)
+
+        T = RBFCoordinateMorpher(corr_mean_vec, img_corr, rbf_thin_plate_splines)
+
+        img_sampling_vals = T(final_img_idxs)
+
+        img_morphed_to_mean = img_interp2d(img_sampling_vals[:,0], img_sampling_vals[:,1], grid=False).reshape(final_img_size)
+
+        imgs_morphed_to_mean_list.append(img_morphed_to_mean)
+
+    atlas_img = np.mean(np.array(imgs_morphed_to_mean_list), axis=0)
+
+    plt.figure()
+    plt.imshow(atlas_img, cmap='gray')
+    plt.savefig(os.path.join(root_path,atlas_output_filename))
+
+    return atlas_img
+
 # %%
+_ = atlas('{0}{1}'.format(shape_img_dir, atlas_params_filename))
+_ = atlas('{0}{1}'.format(fruit_img_dir, atlas_params_filename))
+_ = atlas('{0}{1}'.format(brain_img_dir, atlas_params_filename))
