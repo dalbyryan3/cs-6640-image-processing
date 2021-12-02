@@ -11,9 +11,11 @@ import os
 import json
 import numpy as np
 import matplotlib.pyplot as plt
+from numpy.core.fromnumeric import shape
 import skimage as ski
 import scipy
 from skimage import io
+from skimage.exposure import match_histograms
 from scipy.interpolate import RBFInterpolator, RectBivariateSpline
 
 # %%
@@ -140,12 +142,12 @@ class RBFCoordinateMorpher():
     # Note this object is called similarly and behaves like RBFInterpolator 
     # Other notes on coordinate warping as interpolation: RBF based coordinate warping can be viewed as RBF interpolation that will allow sampling using coordinates of the image that is being morphed "towards" to get the coordinates of the original image to sample from such that the correspondences of the original align with the correspondences of the image that is being morphed "towards"
     # i.e. for morphing img1 "towards" img2 (what I call T1 in subsequent code because we will sample img1 with transformed values) would be able to query interpolator at a coordinate of img2 to get its corresponding img1 coordinate based on the defined correspondence relationships. More specifically suppose we query a correspondence coordinate of img2 we will get out the corresponding correspondence coordinate of img1 where we can sample at to get the pixel value we should place at that img2 coordinate to make it look like img1 morphed "towards" img2. 
-    def __init__(self, img_to_morph_towards_correspondences, img_to_sample_from_correspondences, basis_function, basis_function_kargs=None):
+    def __init__(self, img_to_morph_towards_correspondences, img_to_sample_from_correspondences, basis_function, basis_function_kwargs=None):
         # data_point_coords is ndarray [(x1,y1),...,(xn,yn)], # nx2 
         # data_point_vals is ndarray [(x1,y1),...,(xn,yn)] # nx2
         self.data_point_coords = img_to_morph_towards_correspondences
         self.data_point_vals = img_to_sample_from_correspondences
-        self.basis_function = basis_function if basis_function_kargs is None else lambda a,b: basis_function(a,b,**basis_function_kargs)
+        self.basis_function = basis_function if basis_function_kwargs is None else lambda a,b: basis_function(a,b,**basis_function_kwargs)
         self.kx, self.px, self.ky, self.py = self._solve_transform_params()
 
     def _solve_transform_params(self):
@@ -280,7 +282,7 @@ _ = visualize_correspondences('{0}{1}'.format(president_img_dir, morph_params_fi
 
 # %%
 # Morphing routine
-def morph(params_filepath):
+def morph(params_filepath, should_output_file=True, basis_function=rbf_thin_plate_splines, basis_function_kwargs=None, should_match_histograms=False):
     # Read morph file that describes correspondences
     morph_filenames, morph_correspondences_dict, morph_output_filename_base, morph_num_outputs = read_morph(params_filepath)
 
@@ -295,10 +297,17 @@ def morph(params_filepath):
     img1_corr[:,[0,1]] = img1_corr[:,[1,0]]
     img2_corr[:,[0,1]] = img2_corr[:,[1,0]]
 
+    M = len(morph_filenames)
+    N = img1_corr.shape[0]
+
     # Get orginal images
     root_path = os.path.dirname(os.path.abspath(params_filepath))
     img1 = ski.img_as_float(io.imread(os.path.join(root_path, morph_filenames[0]), as_gray=True))
     img2 = ski.img_as_float(io.imread(os.path.join(root_path, morph_filenames[1]), as_gray=True))
+
+    # Handle intensity differences between images
+    if should_match_histograms:
+        img1 = match_histograms(img1, img2)
 
     # Pad images to be same size, will add to ends of dimensions so correspondence locations still have same meaning
     final_img_size = np.maximum(img1.shape, img2.shape)
@@ -316,9 +325,9 @@ def morph(params_filepath):
     for i,t in enumerate(t_vals):
         c_corr = (1-t)*img1_corr + t*img2_corr
         # Morphing img1 "towards" c_corr
-        T1 = RBFCoordinateMorpher(c_corr, img1_corr, rbf_thin_plate_splines) 
+        T1 = RBFCoordinateMorpher(c_corr, img1_corr, basis_function=basis_function, basis_function_kwargs=basis_function_kwargs) 
         # Morphing img2 "towards" c_corr
-        T2 = RBFCoordinateMorpher(c_corr, img2_corr, rbf_thin_plate_splines) 
+        T2 = RBFCoordinateMorpher(c_corr, img2_corr, basis_function=basis_function, basis_function_kwargs=basis_function_kwargs) 
         T1_final_img_sampling_vals = T1(final_img_idxs)
         T2_final_img_sampling_vals = T2(final_img_idxs)
 
@@ -328,16 +337,26 @@ def morph(params_filepath):
 
         plt.figure()
         plt.imshow(final_img, cmap='gray')
-        plt.savefig('{0}_{1}.png'.format(os.path.join(root_path,morph_output_filename_base), i))
+        plt.title('{0} Morph\nwith {1} Samples and {2} Correspondences\nwith {3} RBF function and {4} kwargs\nHistogram Matched={5}'.format(morph_output_filename_base, M, N, basis_function.__name__, basis_function_kwargs, should_match_histograms))
+        if should_output_file:
+            plt.savefig('{0}_{1}.png'.format(os.path.join(root_path,morph_output_filename_base), i))
 
     return final_img_list
 
 # %%
-_ = morph('{0}{1}'.format(president_img_dir, morph_params_filename_2))
+# _ = morph('{0}{1}'.format(shape_img_dir, morph_params_filename), should_output_file=False)
+# _ = morph('{0}{1}'.format(shape_img_dir, morph_params_filename), basis_function=rbf_gaussian, basis_function_kwargs={'sigma':1}, should_output_file=False)
+_ = morph('{0}{1}'.format(fruit_img_dir, morph_params_filename), should_output_file=False)
+_ = morph('{0}{1}'.format(fruit_img_dir, morph_params_filename), should_match_histograms=True, should_output_file=False)
+# _ = morph('{0}{1}'.format(fruit_img_dir, morph_params_filename), basis_function=rbf_gaussian, basis_function_kwargs={'sigma':1}, should_output_file=False)
+# _ = morph('{0}{1}'.format(president_img_dir, morph_params_filename), should_output_file=False)
+# _ = morph('{0}{1}'.format(president_img_dir, morph_params_filename), basis_function=rbf_gaussian, basis_function_kwargs={'sigma':1}, should_output_file=False)
+# _ = morph('{0}{1}'.format(president_img_dir, morph_params_filename), basis_function=rbf_gaussian, basis_function_kwargs={'sigma':0.2}, should_output_file=False)
+# _ = morph('{0}{1}'.format(president_img_dir, morph_params_filename), basis_function=rbf_gaussian, basis_function_kwargs={'sigma':3}, should_output_file=False)
+# _ = morph('{0}{1}'.format(president_img_dir, morph_params_filename_2), should_output_file=False)
+# _ = morph('{0}{1}'.format(president_img_dir, morph_params_filename_2), basis_function=rbf_gaussian, basis_function_kwargs={'sigma':1}, should_output_file=False)
 # %%
 # TODO 
-# Implement atlas
-
 # Deal with contrast/intensity differences for both algorithms using rescaling and/or historgram matching 
 
 # Clean up all code and finish write up by answering ALL questions
@@ -350,7 +369,7 @@ atlas_fruit_input_filenames, atlas_fruit_correspondences_dict, atlas_fruit_outpu
 atlas_fruit_input_filenames, atlas_fruit_correspondences_dict, atlas_fruit_output_filename = visualize_correspondences('{0}{1}'.format(brain_img_dir, atlas_params_filename), is_atlas=True, figsize=(50,5), color=['red','green','blue','black', 'gray', 'maroon', 'darkorange', 'cyan', 'magenta', 'lightgreen','cadetblue', 'lightyellow'], suptitle_text='Atlas Fruits Correspondences', suptitle_fontsize=20)
 # %%
 # Atlas routine
-def atlas(params_filepath):
+def atlas(params_filepath, should_output_file=True, basis_function=rbf_thin_plate_splines, basis_function_kwargs=None, should_match_histograms=False):
     # Get root directory path
     root_path = os.path.dirname(os.path.abspath(params_filepath))
 
@@ -375,8 +394,9 @@ def atlas(params_filepath):
         img_list.append(img)
     
     # Determine mean correlation values
-    corr_mat = np.array(corr_list) # MxNx2 where m is the number of samples and n is the number of landmarks
+    corr_mat = np.array(corr_list) # MxNx2 where m is the number of samples and n is the number of correspondences
     M = corr_mat.shape[0] 
+    N = corr_mat.shape[1]
     corr_mean_vec = np.mean(corr_mat, axis=0)
 
     # Determine final image size for image pre-processing
@@ -385,17 +405,29 @@ def atlas(params_filepath):
     imgs_morphed_to_mean_list = []
 
     # Now will do image pre-processing, form interpolators for each image, use RBFCoordinateMorpher and sample to get image mapped to mean
-    for i in range(len(img_list)):
-        img = img_list[i]
-        img_corr = corr_list[i]
+
+    img_processed_list = []
+    sum_img = np.zeros(final_img_size)
+    for img in img_list:
         # Pad images to be same size, will add to ends of dimensions so correspondence locations still have same meaning
         img_processed = pad_image_to_bigger_or_equal_size_at_dim_ends(img, final_img_size)
+        img_processed_list.append(img_processed)
+        sum_img += img_processed
+    avg_img = sum_img/len(img_list)
+
+    for i in range(len(corr_list)):
+        img_processed = img_processed_list[i]
+        img_corr = corr_list[i]
+
+        # Handle intensity differences between images
+        if should_match_histograms:
+            img_processed = match_histograms(img_processed, avg_img)
 
         # Will create interpolator objects for sampling from original images
         # RectBiVariateSpline ust like interp2d but specific for evenly spaced grids
         img_interp2d = RectBivariateSpline(np.arange(final_img_size[0]), np.arange(final_img_size[1]), img_processed)
 
-        T = RBFCoordinateMorpher(corr_mean_vec, img_corr, rbf_thin_plate_splines)
+        T = RBFCoordinateMorpher(corr_mean_vec, img_corr, basis_function=basis_function,basis_function_kwargs=basis_function_kwargs)
 
         img_sampling_vals = T(final_img_idxs)
 
@@ -407,11 +439,19 @@ def atlas(params_filepath):
 
     plt.figure()
     plt.imshow(atlas_img, cmap='gray')
-    plt.savefig(os.path.join(root_path,atlas_output_filename))
+    plt.title('{0} Atlas\nwith {1} Samples and {2} Correspondences\nwith {3} RBF function and {4} kwargs\nHistogram Matched={5}'.format(atlas_output_filename, M, N, basis_function.__name__, basis_function_kwargs, should_match_histograms))
+    if should_output_file:
+        plt.savefig(os.path.join(root_path,atlas_output_filename))
 
     return atlas_img
 
 # %%
-_ = atlas('{0}{1}'.format(shape_img_dir, atlas_params_filename))
-_ = atlas('{0}{1}'.format(fruit_img_dir, atlas_params_filename))
-_ = atlas('{0}{1}'.format(brain_img_dir, atlas_params_filename))
+# _ = atlas('{0}{1}'.format(shape_img_dir, atlas_params_filename), should_output_file=False)
+# _ = atlas('{0}{1}'.format(shape_img_dir, atlas_params_filename), basis_function=rbf_gaussian, basis_function_kwargs={'sigma':1}, should_output_file=False)
+# _ = atlas('{0}{1}'.format(fruit_img_dir, atlas_params_filename), should_output_file=False)
+# _ = atlas('{0}{1}'.format(fruit_img_dir, atlas_params_filename), basis_function=rbf_gaussian, basis_function_kwargs={'sigma':1}, should_output_file=False)
+# _ = atlas('{0}{1}'.format(fruit_img_dir, atlas_params_filename), basis_function=rbf_gaussian, basis_function_kwargs={'sigma':0.2}, should_output_file=False)
+# _ = atlas('{0}{1}'.format(fruit_img_dir, atlas_params_filename), basis_function=rbf_gaussian, basis_function_kwargs={'sigma':3}, should_output_file=False)
+_ = atlas('{0}{1}'.format(brain_img_dir, atlas_params_filename), should_output_file=False)
+_ = atlas('{0}{1}'.format(brain_img_dir, atlas_params_filename), should_match_histograms=True, should_output_file=False)
+# _ = atlas('{0}{1}'.format(brain_img_dir, atlas_params_filename), basis_function=rbf_gaussian, basis_function_kwargs={'sigma':1}, should_output_file=False)
