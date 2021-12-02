@@ -14,12 +14,13 @@ import matplotlib.pyplot as plt
 import skimage as ski
 import scipy
 from skimage import io
-from scipy.interpolate import griddata, RBFInterpolator, RectBivariateSpline
+from scipy.interpolate import RBFInterpolator, RectBivariateSpline
 
 # %%
 shape_img_dir = './shape_images/'
 fruit_img_dir = './fruit_images/'
 president_img_dir = './president_images/'
+brain_img_dir = './brain_images/'
 morph_params_filename = 'morph_params.json'
 morph_params_filename_2 = 'morph_params_2.json'
 atlas_params_filename = 'atlas_params.json'
@@ -335,8 +336,6 @@ def morph(params_filepath):
 _ = morph('{0}{1}'.format(president_img_dir, morph_params_filename_2))
 # %%
 # TODO 
-# Correspondences of brain images, try modifying display_images_for_labelling.py to use ginput to get get correspondences quicker
-
 # Implement atlas
 
 # Deal with contrast/intensity differences for both algorithms using rescaling and/or historgram matching 
@@ -348,6 +347,7 @@ _ = morph('{0}{1}'.format(president_img_dir, morph_params_filename_2))
 # %%
 atlas_shapes_input_filenames, atlas_shapes_correspondences_dict, atlas_shapes_output_filename = visualize_correspondences('{0}{1}'.format(shape_img_dir, atlas_params_filename), is_atlas=True, figsize=(15,5), color=['red','green','blue','black', 'gray', 'maroon', 'darkorange', 'cyan'], suptitle_text='Atlas Shapes Correspondences', suptitle_fontsize=20)
 atlas_fruit_input_filenames, atlas_fruit_correspondences_dict, atlas_fruit_output_filename = visualize_correspondences('{0}{1}'.format(fruit_img_dir, atlas_params_filename), is_atlas=True, figsize=(15,5), color=['red','green','blue','black', 'gray', 'maroon', 'darkorange', 'cyan', 'magenta', 'lightgreen'], suptitle_text='Atlas Fruits Correspondences', suptitle_fontsize=20)
+atlas_fruit_input_filenames, atlas_fruit_correspondences_dict, atlas_fruit_output_filename = visualize_correspondences('{0}{1}'.format(brain_img_dir, atlas_params_filename), is_atlas=True, figsize=(50,5), color=['red','green','blue','black', 'gray', 'maroon', 'darkorange', 'cyan', 'magenta', 'lightgreen','cadetblue', 'lightyellow'], suptitle_text='Atlas Fruits Correspondences', suptitle_fontsize=20)
 # %%
 def atlas(params_filepath):
     pass
