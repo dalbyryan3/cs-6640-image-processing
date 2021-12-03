@@ -1,0 +1,14 @@
+{
+"Input files":["IBSR_08_ana_normalized_cropped_slice_42.tiff","IBSR_13_ana_normalized_cropped_slice_44.tiff","IBSR_03_ana_normalized_cropped_slice_44.tiff","IBSR_06_ana_normalized_cropped_slice_40.tiff","IBSR_11_ana_normalized_cropped_slice_37.tiff","IBSR_07_ana_normalized_cropped_slice_40.tiff","IBSR_12_ana_normalized_cropped_slice_43.tiff","IBSR_16_ana_normalized_cropped_slice_42.tiff","IBSR_05_ana_normalized_cropped_slice_40.tiff","IBSR_14_ana_normalized_cropped_slice_40.tiff","IBSR_02_ana_normalized_cropped_slice_41.tiff","IBSR_01_ana_normalized_cropped_slice_44.tiff","IBSR_09_ana_normalized_cropped_slice_41.tiff","IBSR_04_ana_normalized_cropped_slice_46.tiff"],
+"Correspondences":
+[
+
+[[141, 43], [138, 43], [136, 42], [145, 39], [136, 48], [129, 48], [147, 46], [165, 50], [146, 36], [146, 49], [159, 47], [146, 39], [143, 47], [139, 46]], 
+[[119, 21], [116, 17], [124, 23], [132, 16], [121, 17], [117, 19], [136, 28], [147, 19], [126, 16], [125, 12], [143, 18], [112, 17], [122, 15], [119, 20]], 
+[[115, 96], [110, 99], [110, 102], [118, 95], [113, 97], [106, 90], [122, 103], [133, 111], [118, 100], [121, 101], [126, 104], [110, 96], [115, 92], [112, 101]],
+[[120, 133], [113, 137], [116, 138], [124, 131], [119, 133], [114, 123], [128, 142], [137, 155], [124, 137], [130, 143], [136, 144], [115, 140], [117, 132], [116, 140]], 
+[[62, 112], [53, 110], [52, 106], [55, 95], [55, 98], [56, 100], [71, 117], [64, 120], [58, 105], [61, 110], [68, 113], [51, 104], [57, 94], [49, 108]]
+
+],
+    "Output file": "brain_atlas_out"
+}

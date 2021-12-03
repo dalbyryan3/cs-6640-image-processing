@@ -1,31 +1,54 @@
 # %% [markdown]
-# # CS6640 Project 4- Ryan Dalby
-#
-# General notes
-#
-# - All images used are either provided by this class or are public domain licensed images from Google Images or Flickr.
-#
+#  # CS6640 Project 4- Ryan Dalby
+# 
+#  General notes
+# 
+#  - All images used are either provided by this class or are public domain licensed images from Google Images or Flickr.
+# 
+# 
+# Project General Information
+# 
+# - I chose project option 4b image morphing/atlases. 
+# 
+# - morph(parameter-file-name) and atlas(parameter-file-name) have additional parameters with defaults that make it easier to display results.
+# Calling the standard argument signature will result in file output as specified in the project description.
+# 
+# - Functions and classes used to implement morph(parameter-file-name) and atlas(parameter-file-name) are defined before morph(parameter-file-name) and atlas(parameter-file-name) themselves.
+# 
+# - RBFCoordinateMorpher is my implementation of radial basis function coefficient determination and subsequent interpolation.
+# It behaves syntactically like scipy.interpolate.RBFInterpolator and is tested against it.
+# 
+# - The python file called display_images_for_labelling.py can be used to automatically get coordinates (in the morphing form) to build a *_params.json file.
+# 
+# - project4.ipynb and project4.py are equivalent just the .ipynb has output saved in it.
+
 # %%
-import random
 import os
 import json
 import numpy as np
 import matplotlib.pyplot as plt
-from numpy.core.fromnumeric import shape
 import skimage as ski
 import scipy
 from skimage import io
 from skimage.exposure import match_histograms
 from scipy.interpolate import RBFInterpolator, RectBivariateSpline
 
+
 # %%
+# Define directories and 
 shape_img_dir = './shape_images/'
 fruit_img_dir = './fruit_images/'
 president_img_dir = './president_images/'
+president_intensity_diff_img_dir = './president_images_intensity_diff/'
 brain_img_dir = './brain_images/'
 morph_params_filename = 'morph_params.json'
 morph_params_filename_2 = 'morph_params_2.json'
 atlas_params_filename = 'atlas_params.json'
+atlas_params_filename_2 = 'atlas_params_2.json'
+
+
+# %% [markdown]
+# ## Functions and Classes Used for Morph and Atlas Creation
 
 # %%
 # General functions
@@ -83,6 +106,7 @@ def visualize_correspondences(params_filepath, is_atlas=False, figsize=(5,5), co
     fig.suptitle(suptitle_text, fontsize=suptitle_fontsize)
     plt.show()
     return input_filenames, correspondences_dict, output_info
+
 
 # %%
 # RBF related general functions and classes
@@ -167,7 +191,9 @@ class RBFCoordinateMorpher():
         # Will solve system B_full dot kp_vec = xy_prime_vec for kp_vec
         # Note: May have to handle if overconstrained (may not though because B is square, although may have issues if has linear dependencies)
         U, s, Vh = scipy.linalg.svd(B_full)
-        B_full_inv = np.dot(np.transpose(Vh), np.dot(np.diag(s**-1), np.transpose(U)))
+        # B_full_inv = np.dot(np.transpose(Vh), np.dot(np.diag(s**-1), np.transpose(U))) 
+        s_inv = np.divide(np.array([1.0]), s, out=np.zeros(s.shape, dtype=float), where=s!=0)
+        B_full_inv = np.dot(np.transpose(Vh), np.dot(np.diag(s_inv), np.transpose(U)))
         kp_vec = np.dot(B_full_inv, xy_prime_vec)
         # Confirm svd results give correct inverse
         # print('------------------------')
@@ -194,6 +220,7 @@ class RBFCoordinateMorpher():
 
         # Will give coordinates to sample from in "original image" to create morphed, an ndarray [(x1,y1),...,(xm,ym)], # mx2
         return new_data_point_rbf_interp_vals
+
 
 
 # %%
@@ -250,16 +277,16 @@ def check_RBFCoordinateMorpher_against_RBFInterpolator():
     T1_final_img = T1(final_img_idxs)
     T2_final_img = T2(final_img_idxs)
     print('check_thin_plate_splines_against_naive:')
-    print('T1 final image using RBFCoordinateMorpher:')
+    print('T1 final idxs to sample original image with using RBFCoordinateMorpher:')
     print(T1_final_img)
     print()
-    print('T1 final image using RBFInterpolator')
+    print('T1 final idxs to sample original image with using RBFInterpolator')
     print(T1_final_img_rbfinterp)
     print()
-    print('T2 final image using RBFCoordinateMorpher:')
+    print('T2 final idxs to sample original image with using RBFCoordinateMorpher:')
     print(T2_final_img)
     print()
-    print('T2 final image using RBFInterpolator')
+    print('T2 final idxs to sample original image with using RBFInterpolator')
     print(T2_final_img_rbfinterp)
     print()
     print('--------------------------------------')
@@ -268,9 +295,11 @@ def check_RBFCoordinateMorpher_against_RBFInterpolator():
 check_thin_plate_splines_against_naive()
 check_RBFCoordinateMorpher_against_RBFInterpolator()
 
+
 # %% [markdown]
-# ## Visualize correspondences of morphs 
-#
+# ## Visualize Correspondences of Morphs
+# 
+
 # %%
 _ = visualize_correspondences('{0}{1}'.format(shape_img_dir, morph_params_filename), figsize=(15,5), color=['red','green','blue','black', 'gray', 'maroon', 'darkorange', 'cyan'], suptitle_text='Morphing Shapes Correspondences', suptitle_fontsize=20)
 
@@ -278,7 +307,13 @@ _ = visualize_correspondences('{0}{1}'.format(fruit_img_dir, morph_params_filena
 
 _ = visualize_correspondences('{0}{1}'.format(president_img_dir, morph_params_filename), figsize=(15,5), color=['red','green','blue','black', 'gray', 'maroon', 'darkorange', 'cyan', 'magenta', 'lightgreen','wheat','olive','steelblue','lavender','lime','lightcoral','yellow','pink','deepskyblue','springgreen'], suptitle_text='Morphing Presidents Correspondences', suptitle_fontsize=20)
 
-_ = visualize_correspondences('{0}{1}'.format(president_img_dir, morph_params_filename_2), figsize=(15,5), color=['red','green','blue','black', 'gray', 'maroon', 'darkorange', 'cyan', 'magenta', 'lightgreen','wheat','olive','steelblue','lavender','lime','lightcoral','yellow','pink','deepskyblue','springgreen', 'palevioletred', 'linen', 'cadetblue', 'lightyellow', 'chocolate'], suptitle_text='Morphing Presidents with More Correspondences', suptitle_fontsize=20)
+_ = visualize_correspondences('{0}{1}'.format(president_img_dir, morph_params_filename_2), figsize=(15,5), color=['red','green','blue','black', 'gray', 'maroon', 'darkorange', 'cyan', 'magenta', 'lightgreen','wheat','olive','steelblue','lavender','lime','lightcoral','yellow','pink','deepskyblue','springgreen', 'palevioletred', 'linen', 'cadetblue', 'lightyellow', 'chocolate'], suptitle_text='Morphing Presidents Extra Correspondences', suptitle_fontsize=20)
+
+_ = visualize_correspondences('{0}{1}'.format(president_intensity_diff_img_dir, morph_params_filename_2), figsize=(15,5), color=['red','green','blue','black', 'gray', 'maroon', 'darkorange', 'cyan', 'magenta', 'lightgreen','wheat','olive','steelblue','lavender','lime','lightcoral','yellow','pink','deepskyblue','springgreen', 'palevioletred', 'linen', 'cadetblue', 'lightyellow', 'chocolate'], suptitle_text='Morphing Presidents Extra Correspondences with Intensity Differences', suptitle_fontsize=20)
+
+
+# %% [markdown]
+# ## Morph Implementation
 
 # %%
 # Morphing routine
@@ -343,30 +378,79 @@ def morph(params_filepath, should_output_file=True, basis_function=rbf_thin_plat
 
     return final_img_list
 
-# %%
-# _ = morph('{0}{1}'.format(shape_img_dir, morph_params_filename), should_output_file=False)
-# _ = morph('{0}{1}'.format(shape_img_dir, morph_params_filename), basis_function=rbf_gaussian, basis_function_kwargs={'sigma':1}, should_output_file=False)
-_ = morph('{0}{1}'.format(fruit_img_dir, morph_params_filename), should_output_file=False)
-_ = morph('{0}{1}'.format(fruit_img_dir, morph_params_filename), should_match_histograms=True, should_output_file=False)
-# _ = morph('{0}{1}'.format(fruit_img_dir, morph_params_filename), basis_function=rbf_gaussian, basis_function_kwargs={'sigma':1}, should_output_file=False)
-# _ = morph('{0}{1}'.format(president_img_dir, morph_params_filename), should_output_file=False)
-# _ = morph('{0}{1}'.format(president_img_dir, morph_params_filename), basis_function=rbf_gaussian, basis_function_kwargs={'sigma':1}, should_output_file=False)
-# _ = morph('{0}{1}'.format(president_img_dir, morph_params_filename), basis_function=rbf_gaussian, basis_function_kwargs={'sigma':0.2}, should_output_file=False)
-# _ = morph('{0}{1}'.format(president_img_dir, morph_params_filename), basis_function=rbf_gaussian, basis_function_kwargs={'sigma':3}, should_output_file=False)
-# _ = morph('{0}{1}'.format(president_img_dir, morph_params_filename_2), should_output_file=False)
-# _ = morph('{0}{1}'.format(president_img_dir, morph_params_filename_2), basis_function=rbf_gaussian, basis_function_kwargs={'sigma':1}, should_output_file=False)
-# %%
-# TODO 
-# Deal with contrast/intensity differences for both algorithms using rescaling and/or historgram matching 
-
-# Clean up all code and finish write up by answering ALL questions
 
 # %% [markdown]
-# ## Visualize correspondences of atlases  
+# ## Morphs Results 
+
+# %% [markdown]
+# ### Morphs with Thin-Plate-Spline RBF
+# Morphing with a thin-plate-spline RBF gives consistent results that require no hyperparameter tuning.
+# As can be seen later a bad gaussian RBF $\sigma$ value can result in bad results but gives more alignment and warping control.
+# 
+# The shapes show a smooths transition because the are very well aligned initially (the "center" of the shape is in the same spot) while for the fruit and president morphs the transition isn't as smooth because the "center" of the image subject is not necessarily aligned.
+# It may be useful to do some sort of alignment of the images before even identifying correspondences.
+
 # %%
-atlas_shapes_input_filenames, atlas_shapes_correspondences_dict, atlas_shapes_output_filename = visualize_correspondences('{0}{1}'.format(shape_img_dir, atlas_params_filename), is_atlas=True, figsize=(15,5), color=['red','green','blue','black', 'gray', 'maroon', 'darkorange', 'cyan'], suptitle_text='Atlas Shapes Correspondences', suptitle_fontsize=20)
-atlas_fruit_input_filenames, atlas_fruit_correspondences_dict, atlas_fruit_output_filename = visualize_correspondences('{0}{1}'.format(fruit_img_dir, atlas_params_filename), is_atlas=True, figsize=(15,5), color=['red','green','blue','black', 'gray', 'maroon', 'darkorange', 'cyan', 'magenta', 'lightgreen'], suptitle_text='Atlas Fruits Correspondences', suptitle_fontsize=20)
-atlas_fruit_input_filenames, atlas_fruit_correspondences_dict, atlas_fruit_output_filename = visualize_correspondences('{0}{1}'.format(brain_img_dir, atlas_params_filename), is_atlas=True, figsize=(50,5), color=['red','green','blue','black', 'gray', 'maroon', 'darkorange', 'cyan', 'magenta', 'lightgreen','cadetblue', 'lightyellow'], suptitle_text='Atlas Fruits Correspondences', suptitle_fontsize=20)
+_ = morph('{0}{1}'.format(shape_img_dir, morph_params_filename), should_output_file=False)
+_ = morph('{0}{1}'.format(fruit_img_dir, morph_params_filename), should_output_file=False)
+_ = morph('{0}{1}'.format(president_img_dir, morph_params_filename), should_output_file=False)
+
+# %% [markdown]
+# ### Morphs with More Correspondences
+# Something that became very evidently clear once experimenting with different number of correspondences was how important they are to define the warp/morph between images.
+# Just adding correspondences near the body of the presidents gives much better results because the transformation has some notion of how to warp the body part of the image.
+# In a way the morphing is only as good as the correspondences and erroneous correspondences gave very poor morphing results.
+
+# %%
+_ = morph('{0}{1}'.format(president_img_dir, morph_params_filename_2), should_output_file=False)
+
+# %% [markdown]
+# ### Morphs with Gaussian RBF with Various $\sigma$
+# For morphs using the gaussian RBF the choice of $\sigma$ has an impact on the image morph.
+# 
+# Compared to the thin-plate-splines RBF for low values of $\sigma$ it actually seems like the gaussian can give better results in terms of alignment between the two images. 
+# This may not necessarily be the case for other images.
+# 
+# For low values of $\sigma$ is generally good overall alignment with minimal "over" warping.
+# As $\sigma$ is increased warping between the images becomes more extreme, eventually to the point where the overall alignment between the images is so bad because the warp favored pull everything towards the correspondences.
+# In the end it seems that increasing $\sigma$ can "pull" parts of the image more toward the correspondences.
+
+# %%
+_ = morph('{0}{1}'.format(president_img_dir, morph_params_filename), basis_function=rbf_gaussian, basis_function_kwargs={'sigma':1}, should_output_file=False)
+_ = morph('{0}{1}'.format(president_img_dir, morph_params_filename), basis_function=rbf_gaussian, basis_function_kwargs={'sigma':50}, should_output_file=False)
+_ = morph('{0}{1}'.format(president_img_dir, morph_params_filename), basis_function=rbf_gaussian, basis_function_kwargs={'sigma':150}, should_output_file=False)
+_ = morph('{0}{1}'.format(president_img_dir, morph_params_filename), basis_function=rbf_gaussian, basis_function_kwargs={'sigma':300}, should_output_file=False)
+
+# %% [markdown]
+# ### Morphs with Histogram Matching
+# I also utilized skimage's implementation of histogram matching to help balance differences in intensity between morphed images. 
+# This wasn't super important for morphing although it does give better results primarily in the middle of the warp, so I highly suspect that it will be more important for the atlases.
+
+# %%
+_ = morph('{0}{1}'.format(president_intensity_diff_img_dir, morph_params_filename_2), should_output_file=False)
+_ = morph('{0}{1}'.format(president_intensity_diff_img_dir, morph_params_filename_2), should_output_file=False, should_match_histograms=True)
+
+# %% [markdown]
+# ## Visualize correspondences of atlases
+# For the brain images I labelled some key points based on anatomy diagrams of the brain (Found [here](https://mrimaster.com/anatomy%20brain%20coronal.html)):
+# - Eyes
+# - Inferior cerebellar vermis
+# - Straight sinus
+# - Atrium lateral ventricles
+# - Superior sagittal sinus
+# - Centers of white matter in the different sections of the brain
+# - Area just outside the gray matter
+# 
+
+# %%
+_ = visualize_correspondences('{0}{1}'.format(shape_img_dir, atlas_params_filename), is_atlas=True, figsize=(15,5), color=['red','green','blue','black', 'gray', 'maroon', 'darkorange', 'cyan'], suptitle_text='Shapes Atlas Correspondences', suptitle_fontsize=20)
+_ = visualize_correspondences('{0}{1}'.format(fruit_img_dir, atlas_params_filename), is_atlas=True, figsize=(15,5), color=['red','green','blue','black', 'gray', 'maroon', 'darkorange', 'cyan', 'magenta', 'lightgreen'], suptitle_text='Fruits Atlas Correspondences', suptitle_fontsize=20)
+_ = visualize_correspondences('{0}{1}'.format(brain_img_dir, atlas_params_filename), is_atlas=True, figsize=(50,5), color=['red','green','blue','black', 'gray', 'maroon', 'darkorange', 'cyan', 'magenta', 'lightgreen','cadetblue', 'lightyellow'], suptitle_text='Brain Atlas Correspondences', suptitle_fontsize=20)
+_ = visualize_correspondences('{0}{1}'.format(brain_img_dir, atlas_params_filename_2), is_atlas=True, figsize=(50,5), color=['red','green','blue','magenta', 'maroon'], suptitle_text='Brain Atlas Less Correspondences', suptitle_fontsize=20)
+
+# %% [markdown]
+# ## Atlas Implementation
+
 # %%
 # Atlas routine
 def atlas(params_filepath, should_output_file=True, basis_function=rbf_thin_plate_splines, basis_function_kwargs=None, should_match_histograms=False):
@@ -445,13 +529,108 @@ def atlas(params_filepath, should_output_file=True, basis_function=rbf_thin_plat
 
     return atlas_img
 
+
+# %% [markdown]
+# ## Atlas Results
+
+# %% [markdown]
+# ### Atlas with Thin-Plate-Spline RBF
+# Using a thin plate spline RBF directly gives good atlas results, especially for the brain image which has a fair number of correspondences.
+# - The shape atlas illustrates a mix between an ellipse and a rectangle which is a good representation of a "mean" of the underlying images.
+# - The fruit atlas gives a fruit that is somewhere between the oval nature of a pear and mango and the spherical shape of an apple.
+# - The brain atlas shows a good representation of the "mean" of the given brain images showing:
+#   - Inferior cerebellar vermis very clearly as it was obviously present in each image.
+#   - Atriums of the lateral ventricle are also very clear as it was present in most images.
+#   - Superior sagittal sinus was also clear as it was found in all images.
+#   - Straight sinus is also clear as it is found it all images.
+#   - A fuzzy depiction of what average white and gray matter generally look like, using histogram equalization (as seen later) gives an even better of what "mean" gray and white matter look like.
+# - The brain atlas does not really show the eyes or the actual "tendrils" of the white matter as a clear "mean" of these is not clear between all the images.
+# 
+
 # %%
-# _ = atlas('{0}{1}'.format(shape_img_dir, atlas_params_filename), should_output_file=False)
-# _ = atlas('{0}{1}'.format(shape_img_dir, atlas_params_filename), basis_function=rbf_gaussian, basis_function_kwargs={'sigma':1}, should_output_file=False)
-# _ = atlas('{0}{1}'.format(fruit_img_dir, atlas_params_filename), should_output_file=False)
-# _ = atlas('{0}{1}'.format(fruit_img_dir, atlas_params_filename), basis_function=rbf_gaussian, basis_function_kwargs={'sigma':1}, should_output_file=False)
-# _ = atlas('{0}{1}'.format(fruit_img_dir, atlas_params_filename), basis_function=rbf_gaussian, basis_function_kwargs={'sigma':0.2}, should_output_file=False)
-# _ = atlas('{0}{1}'.format(fruit_img_dir, atlas_params_filename), basis_function=rbf_gaussian, basis_function_kwargs={'sigma':3}, should_output_file=False)
+_ = atlas('{0}{1}'.format(shape_img_dir, atlas_params_filename), should_output_file=False)
+_ = atlas('{0}{1}'.format(fruit_img_dir, atlas_params_filename), should_output_file=False)
 _ = atlas('{0}{1}'.format(brain_img_dir, atlas_params_filename), should_output_file=False)
-_ = atlas('{0}{1}'.format(brain_img_dir, atlas_params_filename), should_match_histograms=True, should_output_file=False)
-# _ = atlas('{0}{1}'.format(brain_img_dir, atlas_params_filename), basis_function=rbf_gaussian, basis_function_kwargs={'sigma':1}, should_output_file=False)
+
+# %% [markdown]
+# ### Atlas with Gaussian RBF
+# Experimenting with the $\sigma$ parameter of the gaussian RBF once again controlled the amount of warping towards the mean correspondences.
+# The shapes atlas illustrates that how $\sigma$ is important to getting a good final atlas that represents its constituents.
+# Here with a $\sigma$ of 1 there are artifacts of the ellipse shape since the warping is not enough, with $\sigma$ of 50 the results are representative, with $\sigma$ of 150 the warping of the ellipse shape gives poor results.
+# 
+# Overall a gaussian RBF gives more fine control over warping but the thin plate splines RBF generally always gives acceptable results without tuning.
+
+# %%
+_ = atlas('{0}{1}'.format(shape_img_dir, atlas_params_filename), basis_function=rbf_gaussian, basis_function_kwargs={'sigma':1}, should_output_file=False)
+_ = atlas('{0}{1}'.format(shape_img_dir, atlas_params_filename), basis_function=rbf_gaussian, basis_function_kwargs={'sigma':50}, should_output_file=False)
+_ = atlas('{0}{1}'.format(shape_img_dir, atlas_params_filename), basis_function=rbf_gaussian, basis_function_kwargs={'sigma':150}, should_output_file=False)
+_ = atlas('{0}{1}'.format(fruit_img_dir, atlas_params_filename), basis_function=rbf_gaussian, basis_function_kwargs={'sigma':1}, should_output_file=False)
+_ = atlas('{0}{1}'.format(fruit_img_dir, atlas_params_filename), basis_function=rbf_gaussian, basis_function_kwargs={'sigma':50}, should_output_file=False)
+_ = atlas('{0}{1}'.format(fruit_img_dir, atlas_params_filename), basis_function=rbf_gaussian, basis_function_kwargs={'sigma':150}, should_output_file=False)
+_ = atlas('{0}{1}'.format(brain_img_dir, atlas_params_filename), basis_function=rbf_gaussian, basis_function_kwargs={'sigma':1}, should_output_file=False)
+_ = atlas('{0}{1}'.format(brain_img_dir, atlas_params_filename), basis_function=rbf_gaussian, basis_function_kwargs={'sigma':50}, should_output_file=False)
+_ = atlas('{0}{1}'.format(brain_img_dir, atlas_params_filename), basis_function=rbf_gaussian, basis_function_kwargs={'sigma':150}, should_output_file=False)
+
+# %% [markdown]
+# ### Atlas with Fewer Correspondences
+# Comparing the brain atlas with only 5 correspondences to the atlas with 12 we can see how important control points/correspondences are to a representative atlas.
+# With only 5 correspondences it is hard to see the atriums of the lateral vertical and even the straight sinus, these are very clear on the atlas with 12 correspondences.
+# 
+# In the end, it is very obvious that good control points are imperative to an effective atlas and even beyond that just having images that are close enough in perspective and features is just as important to be able to even get good control points/correspondences labelled.
+
+# %%
+_ = atlas('{0}{1}'.format(brain_img_dir, atlas_params_filename), should_output_file=False)
+_ = atlas('{0}{1}'.format(brain_img_dir, atlas_params_filename_2), should_output_file=False)
+
+# %% [markdown]
+# ### Atlas with Histogram Matching
+# As suspected histogram matching had more of an impact for atlases than it did for morphing. 
+# This is because of the averaging of the images that is occurring over more than just two images.
+# 
+# - For the shapes examples it seems that histogram matching did little no nothing and added some gray to the background.
+# - For the fruit example histogram matching resulted in a darker image with some background artifacts.
+# This was because the pear image had a very different background than the rest of the images and histogram matching caused issues.
+# - For the brain image histogram matching helped improve the final atlas contrast.
+# Comparing the equalized and non-equalized atlas next to each other it is easier to make out edges of the histogram equalized brain atlas, this shows for similar enough images histogram equalization can powerfully improve final image contrast for further image processing.
+# 
+# In the future I would use a more intelligent histogram matching technique rather than matching to an "averaged" image I may try to just histogram equalize or directly manipulate histogram based on some "mean" intensity value and a "target" mean intensity for all images.
+
+# %%
+_ = atlas('{0}{1}'.format(shape_img_dir, atlas_params_filename), should_output_file=False)
+_ = atlas('{0}{1}'.format(shape_img_dir, atlas_params_filename), should_output_file=False, should_match_histograms=True)
+_ = atlas('{0}{1}'.format(fruit_img_dir, atlas_params_filename), should_output_file=False)
+_ = atlas('{0}{1}'.format(fruit_img_dir, atlas_params_filename), should_output_file=False, should_match_histograms=True)
+_ = atlas('{0}{1}'.format(brain_img_dir, atlas_params_filename), should_output_file=False)
+_ = atlas('{0}{1}'.format(brain_img_dir, atlas_params_filename), should_output_file=False, should_match_histograms=True)
+
+# %% [markdown]
+# ## Questions 
+# (These questions have been answered more in-depth in the results of the morph and atlas but explicitly they'll be answered here)
+# 
+# *How is the quality of the morph or atlas (shape, intensity) affected by the number of control points?*
+# 
+# The morph and atlas are highly affected by the number of control points.
+# Without accurate and a high amount of control points there is no good notion of how to warp the images so the shape of a morph may result in misalignment meaning the shape of the warp is not accurate and an atlas can results in not representing the "mean" of the underlying images. 
+# Misalignment can also result in a poor looking image as when blending the images the corresponding feature pixels intensity values are not blended/added with each other but rather some other pixels intensity values.
+# Both morphing and atlases use some notion of combining image intensities following an underlying coordinate transformation so having a higher number of accurate control points to define the transformation gives a better definition of the "true" underlying coordinate transformation.
+# 
+# *How is the quality of the morph or atlas (shape, intensity) affected by the choice of radial basis functions and parameters?*
+# 
+# The thin plate spline RBF gives consistent results are rarely results in the RBF interpolation causing a poor morph or atlas.
+# The gaussian RBF gives results that can be better than the thin plate spline if $\sigma$ is tuned correctly for certain image.
+# Otherwise the gaussian can result in very poor results for high $\sigma$ values by "pulling" images towards the correspondences too much.
+# 
+# *For the atlas example, what kinds of points are easily found among the different brain images?*
+# - Inferior cerebellar vermis is present in each image.
+# - Superior sagittal sinus is clear in all images.
+# - Straight sinus is also found in all images.
+# - Atriums of the lateral ventricle are also clear in most images.
+# - Gray and white matter is found in all the images as well but in very different shapes and amounts.
+# 
+# *From your experiments, how does the accuracy of the control points affect the results?*
+# 
+# In the end, it is very obvious that good control points are imperative to an effective morph and atlas as they effectively define how warping towards correspondences occurs. 
+# Even beyond that just having images that are close enough in perspective and features is just as important to be able to even get good control points/correspondences labelled.
+# 
+
+
